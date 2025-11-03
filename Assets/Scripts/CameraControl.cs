@@ -1,6 +1,3 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class CameraControl : MonoBehaviour
@@ -9,21 +6,32 @@ public class CameraControl : MonoBehaviour
     private float mouseX, mouseY;
     private Transform playerTransform;
 
-    private void Start()
+    void Start()
     {
-        //원활한 Debugging을 위해 마우스 커서를 보이지 않도록 하였습니다, Play 중 Esc 키를 누르면 마우스를 볼 수 있습니다.
         Cursor.visible = false;
         Cursor.lockState = CursorLockMode.Locked;
         playerTransform = transform.parent;
     }
 
-    private void FixedUpdate()
+    void LateUpdate()
     {
-        mouseX += Input.GetAxis("Mouse X") * sensitivity;
-        playerTransform.rotation = Quaternion.Euler(new Vector3(0, mouseX, 0));
-        
-        mouseY += Input.GetAxis("Mouse Y") * sensitivity;
+        // 1. 입력값 읽기 (프레임당)
+        float dx = Input.GetAxis("Mouse X") * sensitivity;
+        float dy = Input.GetAxis("Mouse Y") * sensitivity;
+
+        // 2. 누적
+        mouseX += dx;
+        mouseY += dy;
+
+        // 3. Pitch 제한
         mouseY = Mathf.Clamp(mouseY, -75f, 75f);
-        transform.localRotation = Quaternion.Euler(new Vector3(-mouseY, 0, 0));
+
+        // 4. 각도 wrap 방지 (0~360 유지)
+        if (mouseX > 360f || mouseX < -360f)
+            mouseX = Mathf.Repeat(mouseX, 360f);
+
+        // 5. 회전 적용
+        playerTransform.rotation = Quaternion.Euler(0, mouseX, 0);
+        transform.localRotation = Quaternion.Euler(-mouseY, 0, 0);
     }
 }

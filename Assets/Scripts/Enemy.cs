@@ -7,16 +7,16 @@ using Random = UnityEngine.Random;
 
 public class Enemy : MonoBehaviour
 {
-    [Header("Preset Fields")] 
+    [Header("Preset Fields")]
     [SerializeField] private Animator animator;
     [SerializeField] private GameObject splashFx;
-    
+
     [Header("Detect/Combat")]
     [SerializeField] private float attackRange = 1.5f;  // 공격 발동 거리
-    [SerializeField] private float sightRange  = 15f;    // 시야 범위(정면에서만 유효)
-    [SerializeField] private float sightFOV    = 90f;    // 정면 시야각(±45°)
-    [SerializeField] private float chaseSpeed  = 3.5f;
-    [SerializeField] private float idleSpeed   = 1.5f;
+    [SerializeField] private float sightRange = 15f;    // 시야 범위(정면에서만 유효)
+    [SerializeField] private float sightFOV = 90f;    // 정면 시야각(±45°)
+    [SerializeField] private float chaseSpeed = 3.5f;
+    [SerializeField] private float idleSpeed = 1.5f;
     [SerializeField] private float stopDistance = 1.2f;  // 플레이어 접근 시 멈춤 거리
 
     [Header("Wander (필수과제 2-1)")]
@@ -24,13 +24,17 @@ public class Enemy : MonoBehaviour
     [SerializeField] private float waypointTolerance = 0.4f;
     [SerializeField] private Vector2 wanderDelayRange = new Vector2(1f, 3f);
 
-    public enum State 
+    [Header("Perception")]
+    [SerializeField] private Transform eyePoint;     // 눈 위치(자식 오브젝트 할당)
+    [SerializeField] private float fallbackEyeHeight = 1.0f; // eyePoint 없을 때만 사용
+
+    public enum State
     {
         None,
         Idle,
         Attack
     }
-    
+
     [Header("Debug")]
     public State state = State.None;
     public State nextState = State.None;
@@ -48,12 +52,12 @@ public class Enemy : MonoBehaviour
         agent.stoppingDistance = stopDistance;
         agent.updateRotation = true;
         agent.updateUpAxis = true;
-        agent.autoBraking = false;           
+        agent.autoBraking = false;
         agent.areaMask = NavMesh.AllAreas;
     }
 
     private void Start()
-    { 
+    {
         // 시작 위치가 NavMesh 바깥이면 가장 가까운 위치로 워프
         if (NavMesh.SamplePosition(transform.position, out var hit, 2f, NavMesh.AllAreas))
             agent.Warp(hit.position);
@@ -64,7 +68,7 @@ public class Enemy : MonoBehaviour
     private void Update()
     {
         //1. 스테이트 전환 상황 판단
-        if (nextState == State.None) 
+        if (nextState == State.None)
         {
             switch (state)
             {
@@ -77,11 +81,11 @@ public class Enemy : MonoBehaviour
                     else if (attackDone) attackDone = false;
                     break;
             }
-            
+
         }
-        
+
         //2. 스테이트 초기화
-        if (nextState != State.None) 
+        if (nextState != State.None)
         {
             state = nextState;
             nextState = State.None;
@@ -111,7 +115,7 @@ public class Enemy : MonoBehaviour
                 UpdateAttack();   // 플레이어 추적 + 공격
                 break;
         }
-        
+
         //3. 글로벌 & 스테이트 업데이트
         //insert code here...
     }
@@ -145,7 +149,10 @@ public class Enemy : MonoBehaviour
     {
         for (int i = 0; i < 15; i++)
         {
-            var random = center + UnityEngine.Random.insideUnitSphere * radius;
+            // 평면(XZ)에서만 랜덤 → Y는 center.y 유지
+            Vector2 r = UnityEngine.Random.insideUnitCircle * radius;
+            Vector3 random = new Vector3(center.x + r.x, center.y, center.z + r.y);
+
             if (NavMesh.SamplePosition(random, out var hit, 2f, NavMesh.AllAreas))
             {
                 result = hit.position;
@@ -155,6 +162,7 @@ public class Enemy : MonoBehaviour
         result = center;
         return false;
     }
+
 
     // ================== Attack(추적/공격) ==================
     private void UpdateAttack()
@@ -209,15 +217,24 @@ public class Enemy : MonoBehaviour
         if (angle > sightFOV * 0.5f) return false;
 
         // 가려짐 체크(옵션)
-        if (Physics.Raycast(transform.position + Vector3.up * 1.0f, dir.normalized, out var hit, sightRange))
+        Vector3 origin = eyePoint ? eyePoint.position : (transform.position + Vector3.up * fallbackEyeHeight);
+        Vector3 dirNorm = (bestT.position - origin).normalized;
+
+        // 정면 각도 체크는 origin 기준으로 다시 계산(수직 성분 제거)
+        Vector3 flatToTarget = bestT.position - origin; flatToTarget.y = 0f;
+        if (Vector3.Angle(transform.forward, flatToTarget) > sightFOV * 0.5f) return false;
+
+        // 가려짐 체크
+        if (Physics.Raycast(origin, dirNorm, out var hit, sightRange))
         {
-            if (((1 << hit.collider.gameObject.layer) & lmPlayer) == 0) return false; // 다른 것에 가려짐
+            if (((1 << hit.collider.gameObject.layer) & lmPlayer) == 0) return false;
         }
+
 
         found = bestT;
         return true;
     }
-    
+
     private void Attack() //현재 공격은 애니메이션만 작동합니다.
     {
         animator.SetTrigger("attack");
@@ -227,7 +244,7 @@ public class Enemy : MonoBehaviour
     {
         Instantiate(splashFx, transform.position, Quaternion.identity);
     }
-    
+
     public void WhenAnimationDone() //Unity Animation Event 에서 실행됩니다.
     {
         attackDone = true;
