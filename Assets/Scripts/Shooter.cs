@@ -20,6 +20,9 @@ public class Shooter : MonoBehaviour
 
     void Update()
     {
+        if (GameManager.Instance.isGameOver)
+            return;  // 게임오버면 총 발사 막기
+
         if (Input.GetMouseButtonDown(0))
             Shoot();
     }
